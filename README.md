@@ -70,11 +70,6 @@ Assignment3/
 - Python 3.7+
 - Required packages: matplotlib, numpy, pandas, seaborn
 
-```bash
-# Install Python visualization packages
-pip install matplotlib numpy pandas seaborn
-```
-
 ### Installation on Ubuntu/WSL:
 
 ```bash
