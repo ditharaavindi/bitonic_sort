@@ -2,7 +2,7 @@
 # Author: Parallel Computing Assignment 3
 # Date: December 2025
 
-CC = gcc
+CC = gcc-15
 CFLAGS = -Wall -Wextra -O3 -std=c99 -fopenmp
 TARGET = openmp_bitonic
 SOURCE = openmp_bitonic.c
