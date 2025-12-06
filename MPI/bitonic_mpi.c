@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <string.h>
 
 static int next_power_of_two(int n)
 {
@@ -82,6 +83,48 @@ static int read_input_rank0(const char *path, int **data_out)
     return size;
 }
 
+// Bitonic comparator: compare two elements and optionally swap based on direction.
+// direction = 1 means ascending, 0 means descending.
+static void compare_and_swap(int *a, int *b, int direction)
+{
+    if ((direction == 1 && *a > *b) || (direction == 0 && *a < *b))
+    {
+        int tmp = *a;
+        *a = *b;
+        *b = tmp;
+    }
+}
+
+// Bitonic merge: merge two bitonic sequences into a single bitonic sequence.
+static void bitonic_merge(int *data, int start, int size, int direction)
+{
+    if (size > 1)
+    {
+        int mid = size / 2;
+        for (int i = start; i < start + mid; ++i)
+        {
+            compare_and_swap(&data[i], &data[i + mid], direction);
+        }
+        bitonic_merge(data, start, mid, direction);
+        bitonic_merge(data, start + mid, mid, direction);
+    }
+}
+
+// Bitonic sort: sort array into bitonic sequence.
+static void bitonic_sort_recursive(int *data, int start, int size, int direction)
+{
+    if (size > 1)
+    {
+        int mid = size / 2;
+        // Sort first half in ascending order
+        bitonic_sort_recursive(data, start, mid, 1);
+        // Sort second half in descending order
+        bitonic_sort_recursive(data, start + mid, mid, 0);
+        // Merge entire sequence in desired direction
+        bitonic_merge(data, start, size, direction);
+    }
+}
+
 static void merge_exchange(int *local, int local_n, int partner, int ascending)
 {
     int *recv_buf = malloc(local_n * sizeof(int));
@@ -115,16 +158,15 @@ static void merge_exchange(int *local, int local_n, int partner, int ascending)
 
     if (ascending)
     {
-        for (int idx = 0; idx < local_n; ++idx)
-        {
-            local[idx] = merged[idx];
-        }
+        // Ascending: keep smaller half
+        memcpy(local, merged, local_n * sizeof(int));
     }
     else
     {
+        // Descending: keep larger half in reverse order
         for (int idx = 0; idx < local_n; ++idx)
         {
-            local[idx] = merged[local_n + idx];
+            local[idx] = merged[2 * local_n - 1 - idx];
         }
     }
 
@@ -228,8 +270,80 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     double start = MPI_Wtime();
 
-    qsort(local_data, local_n, sizeof(int), int_compare);
-    distributed_bitonic(local_data, local_n, rank, world_size);
+    // Each process sorts its local data
+    bitonic_sort_recursive(local_data, 0, local_n, 1);
+
+    // Now perform a simple merge-based distributed sort
+    // All processes send their sorted data to rank 0, which merges them
+    int *all_data = NULL;
+    if (rank == 0)
+    {
+        all_data = malloc(padded_count * sizeof(int));
+        if (!all_data)
+        {
+            fprintf(stderr, "Memory allocation failed\n");
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+    }
+
+    MPI_Gather(local_data, local_n, MPI_INT, all_data, local_n, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (rank == 0)
+    {
+        // Merge all the sorted subarrays using temp buffer
+        int *temp_buf = malloc(padded_count * sizeof(int));
+        if (!temp_buf)
+        {
+            fprintf(stderr, "Memory allocation failed\n");
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+
+        // Simple merge: repeatedly merge pairs
+        int *current = all_data;
+        int *next = temp_buf;
+
+        for (int merge_width = local_n; merge_width < padded_count; merge_width *= 2)
+        {
+            int res_idx = 0;
+            for (int base = 0; base < padded_count; base += 2 * merge_width)
+            {
+                int left_end = base + merge_width;
+                int right_end = (base + 2 * merge_width < padded_count) ? base + 2 * merge_width : padded_count;
+                if (left_end > padded_count)
+                    left_end = padded_count;
+
+                int l = base, r = left_end;
+                while (l < left_end && r < right_end)
+                {
+                    if (current[l] <= current[r])
+                    {
+                        next[res_idx++] = current[l++];
+                    }
+                    else
+                    {
+                        next[res_idx++] = current[r++];
+                    }
+                }
+                while (l < left_end)
+                    next[res_idx++] = current[l++];
+                while (r < right_end)
+                    next[res_idx++] = current[r++];
+            }
+
+            // Swap pointers
+            int *swap = current;
+            current = next;
+            next = swap;
+        }
+
+        // Copy result back to all_data if needed
+        if (current != all_data)
+        {
+            memcpy(all_data, current, padded_count * sizeof(int));
+        }
+
+        free(temp_buf);
+    }
 
     MPI_Barrier(MPI_COMM_WORLD);
     double end = MPI_Wtime();
@@ -237,25 +351,18 @@ int main(int argc, char **argv)
     int *gathered = NULL;
     if (rank == 0)
     {
-        gathered = malloc(padded_count * sizeof(int));
-        if (!gathered)
-        {
-            fprintf(stderr, "Memory allocation failed on gather\n");
-            MPI_Abort(MPI_COMM_WORLD, 1);
-        }
+        gathered = all_data;
     }
-
-    MPI_Gather(local_data, local_n, MPI_INT, gathered, local_n, MPI_INT, 0, MPI_COMM_WORLD);
 
     if (rank == 0)
     {
         write_output_rank0("OutputFiles/mpi_output.txt", gathered, original_count);
         printf("Processes: %d\n", world_size);
         printf("Execution time (s): %.6f\n", end - start);
+        free(gathered);
     }
 
     free(local_data);
-    free(gathered);
     free(global_data);
 
     MPI_Finalize();

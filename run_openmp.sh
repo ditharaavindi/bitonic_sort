@@ -8,7 +8,9 @@ RESULTS=OutputFiles/openmp_times.txt
 mkdir -p OutputFiles
 
 echo "Building OpenMP version..."
-gcc -O2 -std=c11 -fopenmp OpenMP/bitonic_openmp.c -o "$EXE"
+CC=${CC:-clang}
+OMP_FLAGS="-Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include -L/opt/homebrew/opt/libomp/lib -lomp"
+"$CC" -O2 -std=c11 $OMP_FLAGS OpenMP/bitonic_openmp.c -o "$EXE"
 
 echo "Input file: $INPUT" > "$RESULTS"
 for t in 1 2 4 8 16; do

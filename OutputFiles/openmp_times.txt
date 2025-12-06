@@ -1,0 +1,6 @@
+Input file: InputFiles/input_small.txt
+1 0.000146
+2 0.000084
+4 0.000117
+8 0.000451
+16 0.000727
