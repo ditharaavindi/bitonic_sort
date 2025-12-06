@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INPUT=${1:-InputFiles/input1.txt}
+INPUT=${1:-InputFiles/input.txt}
 EXE=MPI/bitonic_mpi
 RESULTS=OutputFiles/mpi_times.txt
 MPI_RUN_OPTS=${MPI_RUN_OPTS:---oversubscribe}

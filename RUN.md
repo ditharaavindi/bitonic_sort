@@ -1,5 +1,44 @@
 # Run & Build Guide
 
+## Prerequisites Installation
+
+### macOS
+
+```bash
+# Install Homebrew package manager (if needed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install OpenMP (libomp) and MPI (Open MPI)
+brew install libomp open-mpi
+
+# Verify installation
+clang --version
+mpicc --version
+```
+
+### Ubuntu/Debian (Linux)
+
+```bash
+sudo apt-get update
+sudo apt-get install libomp-dev libopenmpi-dev openmpi-bin
+
+# Verify
+gcc --version
+mpicc --version
+```
+
+### Red Hat/CentOS/Fedora (Linux)
+
+```bash
+sudo dnf install libomp-devel open-mpi-devel
+
+# Verify
+gcc --version
+mpicc --version
+```
+
+---
+
 ## OpenMP Version
 
 - Build and sweep threads (default input `InputFiles/input1.txt`):

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INPUT=${1:-InputFiles/input1.txt}
+INPUT=${1:-InputFiles/input.txt}
 EXE=OpenMP/bitonic_openmp
 RESULTS=OutputFiles/openmp_times.txt
 
